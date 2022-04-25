@@ -1,6 +1,5 @@
 const express = require('express');
 const cors = require('cors');
-
 const { v4: uuidv4, validate } = require('uuid');
 
 const app = express();
@@ -10,20 +9,71 @@ app.use(cors());
 const users = [];
 
 function checksExistsUserAccount(request, response, next) {
-  // Complete aqui
+  const { username } = request.headers;
+
+  const user = users.find( user => user.username === username)
+
+  if( !user ){
+    return response.status(404).json({error: "User doesn't exists."});
+  }
+  request.user = user;
+  return next();
 }
 
 function checksCreateTodosUserAvailability(request, response, next) {
-  // Complete aqui
+  const { user } = request;
+
+  if ((!user.pro && user.todos.length < 9) || user.pro) {
+    return next();
+  }
+  
+  return response.status(403).json({error: "User unavailability."});
 }
 
 function checksTodoExists(request, response, next) {
-  // Complete aqui
+  const { username } = request.headers;
+  const { id } = request.params;
+  
+  if( !validate(id) ){
+    return response.status(400).json("Invalid UUID");
+  }
+
+  const chekValidUsername = users.find( (user) => user.username === username);
+  if( !chekValidUsername ){
+    return response.status(404).json("Invalid User");
+  }
+
+  const checkToDoBelongsUser = chekValidUsername.todos.find( (todo) => todo.id === id );
+  if( !checkToDoBelongsUser ){
+    return response.status(404).json({error: `ToDo Id: ${id} does not belong to User ${username}.` });
+  }
+
+  request.todo = checkToDoBelongsUser;
+  request.user = chekValidUsername;
+
+  return next();
 }
 
 function findUserById(request, response, next) {
-  // Complete aqui
+
+  const { id } = request.params;
+
+  const user = users.find( user => user.id === id)
+
+  if( !user ){
+    return response.status(404).json({error: "User doesn't exists."});
+  }
+  request.user = user;
+ 
+  return next();
 }
+
+
+app.get("/users", (request, response) => {
+
+  return response.status(200).json( users );
+});
+
 
 app.post('/users', (request, response) => {
   const { name, username } = request.body;
@@ -46,6 +96,7 @@ app.post('/users', (request, response) => {
 
   return response.status(201).json(user);
 });
+
 
 app.get('/users/:id', findUserById, (request, response) => {
   const { user } = request;
@@ -70,7 +121,6 @@ app.get('/todos', checksExistsUserAccount, (request, response) => {
 
   return response.json(user.todos);
 });
-
 app.post('/todos', checksExistsUserAccount, checksCreateTodosUserAvailability, (request, response) => {
   const { title, deadline } = request.body;
   const { user } = request;
@@ -95,7 +145,7 @@ app.put('/todos/:id', checksTodoExists, (request, response) => {
   todo.title = title;
   todo.deadline = new Date(deadline);
 
-  return response.json(todo);
+  return response.json(todo); 
 });
 
 app.patch('/todos/:id/done', checksTodoExists, (request, response) => {
